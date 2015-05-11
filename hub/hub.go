@@ -229,7 +229,6 @@ func (self *Server) GetSession(id string) (result *Session) {
 			authorizations: map[string]bool{},
 			lock:           &sync.RWMutex{},
 		}
-		result.cleanupTimer = &time.Timer{}
 		self.sessions[result.id] = result
 	}
 	return
@@ -498,7 +497,9 @@ func (self *Session) terminate(closing chan struct{}, ws MessagePipe) {
 	self.server.Infof("%v\t-\t[disconnect]\t%v\t%v", time.Now(), self.RemoteAddr, self.id)
 
 	ws.Close()
-	self.cleanupTimer.Stop()
+	if self.cleanupTimer != nil {
+		self.cleanupTimer.Stop()
+	}
 	if atomic.AddInt32(&self.connections, -1) == 0 {
 		self.cleanupTimer = time.AfterFunc(self.server.sessionTimeout, self.remove)
 	}
@@ -520,7 +521,9 @@ func (self *Session) Handle(ws MessagePipe) {
 	defer self.terminate(closing, ws)
 	atomic.AddInt32(&self.connections, 1)
 
-	self.cleanupTimer.Stop()
+	if self.cleanupTimer != nil {
+		self.cleanupTimer.Stop()
+	}
 
 	go self.readLoop(closing, ws)
 	go self.writeLoop(closing, ws)
