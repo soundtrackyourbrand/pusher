@@ -188,7 +188,7 @@ func (self *Server) removeSubscription(id, uri string, withLocking bool) {
 
 func (self *Server) randomId() string {
 	buf := make([]byte, idLength)
-	for index, _ := range buf {
+	for index := range buf {
 		buf[index] = byte(rand.Int31())
 	}
 	return (base64.URLEncoding.EncodeToString(buf))
@@ -209,7 +209,7 @@ func (self *Server) removeSession(id string) {
 
 	delete(self.sessions, id)
 
-	for uri, _ := range self.subscribers[id] {
+	for uri := range self.subscribers[id] {
 		self.removeSubscription(id, uri, false)
 	}
 	self.Infof("%v\t-\t[cleanup]\t%v", time.Now(), id)
@@ -236,7 +236,14 @@ func (self *Server) GetSession(id string) (result *Session) {
 
 func (self *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	self.Infof("%v\t%v\t%v\t%v", time.Now(), r.Method, r.URL, r.RemoteAddr)
-	websocket.Handler(self.GetSession(r.URL.Query().Get("session_id")).handleWS).ServeHTTP(w, r)
+	websocket.Handler(func(ws *websocket.Conn) {
+		if ws == nil {
+			return
+		}
+		s := self.GetSession(r.URL.Query().Get("session_id"))
+		s.RemoteAddr = r.RemoteAddr
+		s.Handle(&wsWrapper{ws})
+	}).ServeHTTP(w, r)
 }
 
 type MessageType string
@@ -324,8 +331,13 @@ func (self *Session) readLoop(closing chan struct{}, ws MessagePipe) {
 	var err error
 	var message *Message
 	for message, err = ws.ReceiveMessage(); err == nil; message, err = ws.ReceiveMessage() {
-		self.input <- *message
-		self.server.Debugf("%v\t%v\t%v\t%v\t%v\t[received from socket]", time.Now(), message.Type, message.URI, self.RemoteAddr, self.id)
+		select {
+		case self.input <- *message:
+			self.server.Debugf("%v\t%v\t%v\t%v\t%v\t[received from socket]", time.Now(), message.Type, message.URI, self.RemoteAddr, self.id)
+			break
+		case <-closing:
+			return
+		}
 	}
 	if err != nil && err != io.EOF {
 		self.server.Errorf("%v\t%v\t%v\t[%v]", time.Now(), self.RemoteAddr, self.id, err)
@@ -505,11 +517,6 @@ func (self *Session) terminate(closing chan struct{}, ws MessagePipe) {
 	}
 }
 
-func (self *Session) handleWS(ws *websocket.Conn) {
-	self.RemoteAddr = ws.Request().RemoteAddr
-	self.Handle(&wsWrapper{ws})
-}
-
 /*
  * Handle works as the session main-loop listening on events
  * on a websocket or other source that implements io.ReadWriteCloser.
@@ -529,15 +536,17 @@ func (self *Session) Handle(ws MessagePipe) {
 	go self.writeLoop(closing, ws)
 	go self.heartbeatLoop(closing)
 
-	self.send(Message{
-		Type: TypeWelcome,
-		Welcome: &Welcome{
-			Heartbeat:          self.server.heartbeat / time.Millisecond,
-			HeartbeatGracetime: self.server.heartbeatGracetime / time.Millisecond,
-			SessionTimeout:     self.server.sessionTimeout / time.Millisecond,
-			Id:                 self.id,
-		},
-	})
+	go func() {
+		self.send(Message{
+			Type: TypeWelcome,
+			Welcome: &Welcome{
+				Heartbeat:          self.server.heartbeat / time.Millisecond,
+				HeartbeatGracetime: self.server.heartbeatGracetime / time.Millisecond,
+				SessionTimeout:     self.server.sessionTimeout / time.Millisecond,
+				Id:                 self.id,
+			},
+		})
+	}()
 
 	var message Message
 	var ok bool
@@ -554,4 +563,5 @@ func (self *Session) Handle(ws MessagePipe) {
 			return
 		}
 	}
+	self.server.Infof("%v\t-\t[gone]\t%v\t%v", time.Now(), self.RemoteAddr, self.id)
 }
