@@ -1,3 +1,5 @@
+var EventEmitter = require('wolfy87-eventemitter');
+
 var parseUrl = function(url){
   var parser = document.createElement('a');
   parser.href = url;
@@ -353,7 +355,8 @@ Pusher.Client.prototype = {
     var channels = this.emitter._getEvents();
     var socket = this;
 
-    for (channel in channels) {
+    for (var i = 0; i < channels.length; i ++) {
+      var channel = channels[i];
       if(channel === 'connect' || channel === 'message') {
         continue;
       }
@@ -441,3 +444,6 @@ Pusher.Client.prototype = {
     this.emitter.removeAllListeners();
   }
 };
+
+module.exports = Pusher;
+

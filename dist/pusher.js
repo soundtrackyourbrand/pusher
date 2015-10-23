@@ -1,13 +1,4 @@
-
-(function(root, factory) {
-  if (typeof define === 'function' && define.amd) {
-    define(factory);
-  } else if (typeof exports === 'object') {
-    module.exports = factory(require, exports, module);
-  } else {
-    root.Pusher = factory();
-  }
-}(this, function(require, exports, module) {
+var EventEmitter = require('wolfy87-eventemitter');
 
 var parseUrl = function(url){
   var parser = document.createElement('a');
@@ -364,7 +355,8 @@ Pusher.Client.prototype = {
     var channels = this.emitter._getEvents();
     var socket = this;
 
-    for (channel in channels) {
+    for (var i = 0; i < channels.length; i ++) {
+      var channel = channels[i];
       if(channel === 'connect' || channel === 'message') {
         continue;
       }
@@ -453,6 +445,5 @@ Pusher.Client.prototype = {
   }
 };
 
-return Pusher;
+module.exports = Pusher;
 
-}));
