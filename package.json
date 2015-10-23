@@ -15,11 +15,13 @@
   "bugs": {
     "url": "https://github.com/soundtrackyourbrand/pusher/issues"
   },
+  "dependencies": {
+    "wolfy87-eventemitter": "^4.3.0"
+  },
   "devDependencies": {
     "chai": "~1.9.1",
     "gulp": "~3.6.1",
-    "testem": "~0.6.15",
-    "wolfy87-eventemitter": "^4.3.0"
+    "testem": "~0.6.15"
   },
   "files": [
     "dist/pusher.js"
