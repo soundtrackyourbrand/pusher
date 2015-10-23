@@ -446,4 +446,3 @@ Pusher.Client.prototype = {
 };
 
 module.exports = Pusher;
-

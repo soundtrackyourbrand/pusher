@@ -21,5 +21,6 @@ My copy
 
 * Bump the version in `package.json`.
 * Build
+* `git tag -a <new-version> -m 'Describe new version'`
 * Push to github.
-* [Create a new release](https://github.com/soundtrackyourbrand/pusher/releases/new)
+* [Create a new release based on the new tag](https://github.com/soundtrackyourbrand/pusher/releases/new)
