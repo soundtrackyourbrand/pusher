@@ -409,7 +409,7 @@ Pusher.Client.prototype = {
   },
 
   authorize: function(packet){
-    if(this.retries[packet.Id] && this.retries[packet.Id] >= this.maxRetries) return;
+    if(this.retries[packet.Data.URI] && this.retries[packet.Data.URI] >= this.maxRetries) return;
 
     var isWrite = packet.Data.Type === 'Message';
     this.authorizer(packet.Data.URI, isWrite, function(token){
@@ -424,7 +424,7 @@ Pusher.Client.prototype = {
         }.bind(this)
       });
     }.bind(this));
-    this.retries[packet.Id] = this.retries[packet.Id] ? this.retries[packet.Id] + 1 : 1;
+    this.retries[packet.Data.URI] = this.retries[packet.Data.URI] ? this.retries[packet.Data.URI] + 1 : 1;
   },
 
   error: function(packet){
