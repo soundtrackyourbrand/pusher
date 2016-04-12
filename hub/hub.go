@@ -346,7 +346,12 @@ func (self *Session) readLoop(ctx context.Context, errc chan struct{}, ws Messag
 		self.server.Errorf("%v\t%v\t%v\t[%v]", time.Now(), self.RemoteAddr, self.id, err)
 	}
 
-	errc <- struct{}{}
+	select {
+	case <-ctx.Done():
+		return
+	case errc <- struct{}{}:
+		return
+	}
 }
 
 func (self *Session) writeLoop(ctx context.Context, errc chan struct{}, ws MessagePipe) {
@@ -357,7 +362,12 @@ func (self *Session) writeLoop(ctx context.Context, errc chan struct{}, ws Messa
 		case message = <-self.output:
 			if err = ws.SendMessage(&message); err != nil {
 				self.server.Fatalf("Error sending %v on %+v: %v", message, ws, err)
-				errc <- struct{}{}
+				select {
+				case <-ctx.Done():
+					return
+				case errc <- struct{}{}:
+					return
+				}
 				return
 			}
 			self.server.Debugf("%v\t%v\t%v\t%v\t%v\t[sent to socket]", time.Now(), message.Type, message.URI, self.RemoteAddr, self.id)
