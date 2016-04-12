@@ -392,7 +392,7 @@ func (self *Session) send(message Message) {
 	select {
 	case self.output <- message:
 	default:
-		self.server.Errorf("Unable to send %+v to %+v, output buffer full", message, self)
+		self.server.Errorf("Unable to send message to %+v, output buffer full", self)
 	}
 }
 
