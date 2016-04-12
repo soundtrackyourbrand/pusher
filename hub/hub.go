@@ -328,7 +328,7 @@ func (self *wsWrapper) SendMessage(m *Message) (err error) {
 	err = websocket.JSON.Send(self.Conn, m)
 	return
 }
-func (self *Session) readLoop(ctx context.Context, errc chan struct{}, ws MessagePipe) {
+func (self *Session) readLoop(ctx context.Context, ws MessagePipe) {
 	var err error
 	var message *Message
 
@@ -345,39 +345,26 @@ func (self *Session) readLoop(ctx context.Context, errc chan struct{}, ws Messag
 	if err != io.EOF {
 		self.server.Errorf("%v\t%v\t%v\t[%v]", time.Now(), self.RemoteAddr, self.id, err)
 	}
-
-	select {
-	case <-ctx.Done():
-		return
-	case errc <- struct{}{}:
-		return
-	}
 }
 
-func (self *Session) writeLoop(ctx context.Context, errc chan struct{}, ws MessagePipe) {
+func (self *Session) writeLoop(ctx context.Context, ws MessagePipe) {
 	var message Message
 	var err error
 	for {
 		select {
+		case <-ctx.Done():
+			return
 		case message = <-self.output:
 			if err = ws.SendMessage(&message); err != nil {
 				self.server.Fatalf("Error sending %v on %+v: %v", message, ws, err)
-				select {
-				case <-ctx.Done():
-					return
-				case errc <- struct{}{}:
-					return
-				}
 				return
 			}
 			self.server.Debugf("%v\t%v\t%v\t%v\t%v\t[sent to socket]", time.Now(), message.Type, message.URI, self.RemoteAddr, self.id)
-		case <-ctx.Done():
-			return
 		}
 	}
 }
 
-func (self *Session) heartbeatLoop(ctx context.Context, errc chan struct{}) {
+func (self *Session) heartbeatLoop(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
@@ -525,7 +512,7 @@ func (self *Session) Handle(ws MessagePipe) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 
-	errc := make(chan struct{})
+	defer cancel()
 	defer self.terminate(ws)
 	atomic.AddInt32(&self.connections, 1)
 
@@ -533,9 +520,20 @@ func (self *Session) Handle(ws MessagePipe) {
 		self.cleanupTimer.Stop()
 	}
 
-	go self.readLoop(ctx, errc, ws)
-	go self.writeLoop(ctx, errc, ws)
-	go self.heartbeatLoop(ctx, errc)
+	go func() {
+		self.readLoop(ctx, ws)
+		cancel()
+	}()
+
+	go func() {
+		self.writeLoop(ctx, ws)
+		cancel()
+	}()
+
+	go func() {
+		self.heartbeatLoop(ctx)
+		cancel()
+	}()
 
 	go func() {
 		self.send(Message{
@@ -553,9 +551,7 @@ func (self *Session) Handle(ws MessagePipe) {
 	var ok bool
 	for {
 		select {
-		case _ = <-errc:
-			cancel()
-			close(errc)
+		case <-ctx.Done():
 			return
 		case message, ok = <-self.input:
 			if !ok {
