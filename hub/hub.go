@@ -13,6 +13,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"golang.org/x/net/context"
+
 	"code.google.com/p/go.net/websocket"
 )
 
@@ -326,26 +328,28 @@ func (self *wsWrapper) SendMessage(m *Message) (err error) {
 	err = websocket.JSON.Send(self.Conn, m)
 	return
 }
-func (self *Session) readLoop(closing chan struct{}, ws MessagePipe) {
-	defer self.kill(closing)
+func (self *Session) readLoop(ctx context.Context, errc chan struct{}, ws MessagePipe) {
 	var err error
 	var message *Message
+
 	for message, err = ws.ReceiveMessage(); err == nil; message, err = ws.ReceiveMessage() {
 		select {
+		case <-ctx.Done():
+			return
 		case self.input <- *message:
 			self.server.Debugf("%v\t%v\t%v\t%v\t%v\t[received from socket]", time.Now(), message.Type, message.URI, self.RemoteAddr, self.id)
 			break
-		case <-closing:
-			return
 		}
 	}
-	if err != nil && err != io.EOF {
+
+	if err != io.EOF {
 		self.server.Errorf("%v\t%v\t%v\t[%v]", time.Now(), self.RemoteAddr, self.id, err)
 	}
+
+	errc <- struct{}{}
 }
 
-func (self *Session) writeLoop(closing chan struct{}, ws MessagePipe) {
-	defer self.kill(closing)
+func (self *Session) writeLoop(ctx context.Context, errc chan struct{}, ws MessagePipe) {
 	var message Message
 	var err error
 	for {
@@ -353,20 +357,20 @@ func (self *Session) writeLoop(closing chan struct{}, ws MessagePipe) {
 		case message = <-self.output:
 			if err = ws.SendMessage(&message); err != nil {
 				self.server.Fatalf("Error sending %v on %+v: %v", message, ws, err)
+				errc <- struct{}{}
 				return
 			}
 			self.server.Debugf("%v\t%v\t%v\t%v\t%v\t[sent to socket]", time.Now(), message.Type, message.URI, self.RemoteAddr, self.id)
-		case <-closing:
+		case <-ctx.Done():
 			return
 		}
 	}
 }
 
-func (self *Session) heartbeatLoop(closing chan struct{}) {
-	defer self.kill(closing)
+func (self *Session) heartbeatLoop(ctx context.Context, errc chan struct{}) {
 	for {
 		select {
-		case <-closing:
+		case <-ctx.Done():
 			return
 		case <-time.After(self.server.heartbeat / 2):
 			self.send(Message{Type: TypeHeartbeat})
@@ -489,10 +493,9 @@ func (self *Session) remove() {
 func (self *Session) kill(closing chan struct{}) {
 	closing <- struct{}{}
 }
-func (self *Session) terminate(closing chan struct{}, ws MessagePipe) {
+func (self *Session) terminate(ws MessagePipe) {
 	self.server.Infof("%v\t-\t[disconnect]\t%v\t%v", time.Now(), self.RemoteAddr, self.id)
 
-	close(closing)
 	ws.Close()
 
 	if self.cleanupTimer != nil {
@@ -510,17 +513,19 @@ func (self *Session) terminate(closing chan struct{}, ws MessagePipe) {
 func (self *Session) Handle(ws MessagePipe) {
 	self.server.Infof("%v\t-\t[connect]\t%v\t%v", time.Now(), self.RemoteAddr, self.id)
 
-	closing := make(chan struct{})
-	defer self.terminate(closing, ws)
+	ctx, cancel := context.WithCancel(context.Background())
+
+	errc := make(chan struct{})
+	defer self.terminate(ws)
 	atomic.AddInt32(&self.connections, 1)
 
 	if self.cleanupTimer != nil {
 		self.cleanupTimer.Stop()
 	}
 
-	go self.readLoop(closing, ws)
-	go self.writeLoop(closing, ws)
-	go self.heartbeatLoop(closing)
+	go self.readLoop(ctx, errc, ws)
+	go self.writeLoop(ctx, errc, ws)
+	go self.heartbeatLoop(ctx, errc)
 
 	go func() {
 		self.send(Message{
@@ -538,7 +543,9 @@ func (self *Session) Handle(ws MessagePipe) {
 	var ok bool
 	for {
 		select {
-		case _ = <-closing:
+		case _ = <-errc:
+			cancel()
+			close(errc)
 			return
 		case message, ok = <-self.input:
 			if !ok {
