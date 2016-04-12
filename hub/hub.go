@@ -363,6 +363,7 @@ func (self *Session) writeLoop(closing chan struct{}, ws MessagePipe) {
 }
 
 func (self *Session) heartbeatLoop(closing chan struct{}) {
+	defer self.kill(closing)
 	for {
 		select {
 		case <-closing:
@@ -486,29 +487,14 @@ func (self *Session) remove() {
 }
 
 func (self *Session) kill(closing chan struct{}) {
-
-	self.lock.Lock()
-	defer self.lock.Unlock()
-
-	select {
-	case _ = <-closing:
-	default:
-		close(closing)
-	}
+	closing <- struct{}{}
 }
 func (self *Session) terminate(closing chan struct{}, ws MessagePipe) {
-	self.lock.Lock()
-	defer self.lock.Unlock()
-
-	select {
-	case _ = <-closing:
-	default:
-		close(closing)
-	}
-
 	self.server.Infof("%v\t-\t[disconnect]\t%v\t%v", time.Now(), self.RemoteAddr, self.id)
 
+	close(closing)
 	ws.Close()
+
 	if self.cleanupTimer != nil {
 		self.cleanupTimer.Stop()
 	}
