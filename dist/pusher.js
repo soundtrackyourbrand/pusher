@@ -47,7 +47,7 @@ Pusher.Transport = {};
 Pusher.Transport.Socket = function(options){
   options = options || {};
 
-  this.loglevel = options.loglevel || 'warn';
+  this.loglevel = options.loglevel || 'warn';
   this.seqNo = 0;
   this.minBackoff = options.minBackoff || 500;
   this.maxBackoff = options.maxBackoff || 10000;
@@ -355,15 +355,16 @@ Pusher.Client.prototype = {
     var channels = this.emitter._getEvents();
     var socket = this;
 
-    for (var i = 0; i < channels.length; i ++) {
-      var channel = channels[i];
-      if(channel === 'connect' || channel === 'message') {
-        continue;
-      }
-      if(this.loglevel === 'info') console.info('Resubscribing to ', channel);
-      socket.subscribe(channel);
-    }
+    this.emitter.removeAllListeners();
 
+    Object.keys(channels).forEach(function(channel) {
+      if (channel !== 'connect' && channel !== 'message') {
+        if(this.loglevel === 'info') console.info('Resubscribing to ', channel);
+        socket.subscribe(channel);
+      }
+    });
+
+    this.emitter.addListeners(channels);
   },
 
   subscribe: function(channel, cb){
