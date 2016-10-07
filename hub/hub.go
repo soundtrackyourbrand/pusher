@@ -15,7 +15,7 @@ import (
 
 	"golang.org/x/net/context"
 
-	"code.google.com/p/go.net/websocket"
+	"golang.org/x/net/websocket"
 )
 
 const (
