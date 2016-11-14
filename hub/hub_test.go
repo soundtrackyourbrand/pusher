@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"time"
 )
 
 func TestHubRecive(t *testing.T) {
@@ -15,8 +16,8 @@ func TestHubRecive(t *testing.T) {
 
 	// Expect an
 	input_welcome := recv.Next(TypeWelcome)
-	assert.Equal(t, input_welcome.Welcome.Heartbeat, 60000, "Expected a heartbeat setting")
-	assert.Equal(t, input_welcome.Welcome.SessionTimeout, 180000, "Expected a heartbeat setting")
+	assert.Equal(t, input_welcome.Welcome.Heartbeat, time.Duration(60000), "Expected a heartbeat setting")
+	assert.Equal(t, input_welcome.Welcome.SessionTimeout, time.Duration(180000), "Expected a heartbeat setting")
 
 	send <- Message{
 		Type: TypeSubscribe,
