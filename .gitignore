@@ -25,3 +25,8 @@ _testmain.go
 node_modules
 testem.log
 bower_components
+
+.DS_Store
+
+# IDEA
+.idea
