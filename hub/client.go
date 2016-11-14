@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"time"
 
-	socknet "github.com/lindroth/socknet/lib"
+	"github.com/soundtrackyourbrand/pusher/socknet"
 )
 
 func StartServer() (net.Listener, *Server) {
