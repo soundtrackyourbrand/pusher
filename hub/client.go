@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net"
 	"net/http"
-	"time"
 
 	"github.com/soundtrackyourbrand/pusher/socknet"
 )
@@ -23,6 +22,7 @@ func StartServer() (net.Listener, *Server) {
 type IncomingMessage <-chan Message
 type OutgoingMessage chan<- Message
 
+/*
 func (in IncomingMessage) Next(msg_type MessageType) Message {
 	for {
 		select {
@@ -32,13 +32,13 @@ func (in IncomingMessage) Next(msg_type MessageType) Message {
 			}
 			if m.Type == msg_type || msg_type == TypeALL {
 				return m
-			}
-		case <-time.After(time.Second * 3600):
+      }
+		case <-time.After(time.Second * 30):
 			panic(fmt.Errorf("timeout"))
 		}
 	}
 	return Message{}
-}
+}*/
 
 type pipe struct {
 	send    chan Message
@@ -106,7 +106,7 @@ func Connect(session_id, origin, location string) (OutgoingMessage, IncomingMess
 			if err != nil {
 				panic(err)
 			}
-			fmt.Printf("INCOMMING: %#v\n", m)
+			fmt.Printf("INCOMMING: %s\n", []byte(o))
 			output <- *m
 		}
 	}()
@@ -119,7 +119,7 @@ func Connect(session_id, origin, location string) (OutgoingMessage, IncomingMess
 			if err != nil {
 				panic(err)
 			}
-			fmt.Printf("OUTPUT: %#v\n", m)
+			fmt.Printf("OUTPUT: %s\n", encoded)
 			ws_input <- string(encoded)
 		}
 	}()

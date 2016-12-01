@@ -3,9 +3,10 @@ package main
 import (
 	"fmt"
 	"github.com/soundtrackyourbrand/pusher/client"
-	"github.com/soundtrackyourbrand/pusher/hub"
+  "github.com/nu7hatch/gouuid"
 	"log"
 	"net/http"
+  "time"
 	"strings"
 )
 
@@ -15,12 +16,19 @@ var input_endpoint = "/devices/RGV2aWNlLCwxbWptcjU3aDVhOC8./rpcserver/rpcclient/
 
 // {"Type":"Message","URI":"/devices/RGV2aWNlLCwxbWptcjU3aDVhOC8./rpcclient/rpcserver/webserver","Data":[{"uri":"/logfilter.html","channel":"f4309837-4087-1000-0bea-b1a94acfb63d"}],"Id":"H1e77lWU21pBddNhPy4c-Q==:4"}
 
-type HtmlRequest struct {
-	Uri     string `json:"uri"`
-	Channel string `json:"channe"`
+type HtmlResponse struct {
+  Body string
+  Code int
 }
 
-func startWebserver(client *client.Client) {
+type HtmlRequest struct {
+	Uri     string `json:"uri"`
+	Channel string `json:"channel"`
+  pipe chan HtmlResponse
+}
+
+
+func startWebserver(send_req func(*HtmlRequest)) {
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		r.ParseForm()       // parse arguments, you have to call this by yourself
 		fmt.Println(r.Form) // print form information in server side
@@ -33,13 +41,17 @@ func startWebserver(client *client.Client) {
 		}
 
 		// Subscribe to a new channel
-		proxy_req := HtmlRequest{Uri: "/logfilter.html", Channel: "xxx"}
-		client.Authorize(input_endpoint+proxy_req.Channel, token)
-		client.Subscribe(input_endpoint + proxy_req.Channel)
-		client.Send(proxy_endpoint, proxy_req)
-		entry := client.Next(hub.TypeMessage)
-		fmt.Fprintf(w, "%#v", entry) // send data to client side
-
+    channel, _ := uuid.NewV4()
+		proxy_req := &HtmlRequest{Uri: r.URL.Path, Channel: channel.String()}
+    send_req(proxy_req)
+    select {
+    case res, _ := <- proxy_req.pipe:
+		  fmt.Fprintf(w, res.Body)
+      w.WriteHeader(res.Code)
+    case <- time.After(10 * time.Second):
+		  fmt.Fprintf(w, "Timeout accessing client")
+      w.WriteHeader(500)
+    }
 	}) // set router
 	err := http.ListenAndServe(":9090", nil) // set listen port
 	if err != nil {
@@ -54,10 +66,26 @@ func main() {
 	client.Authorize(proxy_endpoint, token)
 	fmt.Println("Starting webserver :9090")
 
-	go startWebserver(client)
+  dest := map[string]*HtmlRequest{}
+	go startWebserver(func(proxy_req *HtmlRequest) {
+    uri := input_endpoint + proxy_req.Channel
+    proxy_req.pipe = make(chan HtmlResponse)
+		client.Authorize(uri, token)
+		client.Subscribe(uri)
+    dest[uri] = proxy_req
+		client.Send(proxy_endpoint, []interface{}{proxy_req})
+  })
 
 	for {
-		//entry := client.Next("ALL")
-		//fmt.Println("%#v\n", entry)
+		entry := client.Next()
+    data, s1 := entry.Data.(map[string]interface {})
+    if s1 {
+      body, _ := data["body"].(string)
+      status, _ := data["status"].(float64)
+      response := HtmlResponse{body,int(status)}
+      dest[entry.URI].pipe <- response
+		  client.Unsubscribe(entry.URI)
+      delete(dest, entry.URI)
+    }
 	}
 }
