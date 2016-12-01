@@ -30,10 +30,10 @@ func (in IncomingMessage) Next(msg_type MessageType) Message {
 			if !ok {
 				panic(fmt.Errorf("Input closed"))
 			}
-			if m.Type == msg_type {
+			if m.Type == msg_type || msg_type == TypeALL {
 				return m
 			}
-		case <-time.After(time.Second * 10):
+		case <-time.After(time.Second * 3600):
 			panic(fmt.Errorf("timeout"))
 		}
 	}
@@ -106,6 +106,7 @@ func Connect(session_id, origin, location string) (OutgoingMessage, IncomingMess
 			if err != nil {
 				panic(err)
 			}
+			fmt.Printf("INCOMMING: %#v\n", m)
 			output <- *m
 		}
 	}()
@@ -118,6 +119,7 @@ func Connect(session_id, origin, location string) (OutgoingMessage, IncomingMess
 			if err != nil {
 				panic(err)
 			}
+			fmt.Printf("OUTPUT: %#v\n", m)
 			ws_input <- string(encoded)
 		}
 	}()

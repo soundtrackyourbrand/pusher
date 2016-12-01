@@ -260,6 +260,7 @@ const (
 	TypeMessage     = "Message"
 	TypeAuthorize   = "Authorize"
 	TypeAck         = "Ack"
+	TypeALL         = "ALL"
 )
 
 const (

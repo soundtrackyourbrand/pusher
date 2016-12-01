@@ -71,6 +71,13 @@ func (self *Client) Unsubscribe(uri string) (err error) {
 	return
 }
 
+// {"Type":"Message","URI":"/devices/RGV2aWNlLCwxbWptcjU3aDVhOC8./rpcclient/rpcserver/webserver","Data":[{"uri":"/logfilter.html","channel":"f4309837-4087-1000-0bea-b1a94acfb63d"}],"Id":"H1e77lWU21pBddNhPy4c-Q==:4"}
+func (self *Client) Send(uri string, data interface{}) (err error) {
+	self.outgoing <- hub.Message{Type: hub.TypeMessage, Data: data, URI: uri, Write: true, Id: self.getNextId()}
+	self.incoming.Next(hub.TypeAck)
+	return
+}
+
 func (self *Client) Next(msgType hub.MessageType) hub.Message {
 	return self.incoming.Next(msgType)
 }
